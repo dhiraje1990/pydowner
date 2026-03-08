@@ -25,9 +25,7 @@ pydowner/
 │   ├── download_engine.py # Download handling
 │   └── queue_manager.py  # Download queue
 ├── plugins/              # One .py file per file host
-│   ├── pixeldrain.py
-│   ├── mediafire.py
-│   └── gofile.py
+│   └── mediafire.py
 ├── ui/
 │   └── cli.py           # Command line interface
 ├── config/

@@ -1,22 +1,27 @@
-# core/download_engine.py
 import requests
 from pathlib import Path
+from core.plugin_base import DownloadInfo
 
-def download_file(info, dest_dir="downloads", on_progress=None):
+def download_file(info: DownloadInfo, dest_dir="downloads"):
     dest = Path(dest_dir) / info.filename
-    headers = {}
-    start_byte = dest.stat().st_size if dest.exists() and info.supports_resume else 0
-    if start_byte:
-        headers["Range"] = f"bytes={start_byte}-"
-
-    with requests.get(info.url, headers=headers, stream=True, timeout=30) as r:
-        r.raise_for_status()
-        total = int(r.headers.get("content-length", 0)) + start_byte
-        mode = "ab" if start_byte else "wb"
-        downloaded = start_byte
-        with open(dest, mode) as f:
-            for chunk in r.iter_content(chunk_size=1024 * 64):
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    
+    print(f"Downloading: {info.filename}")
+    print(f"Size: {info.filesize / (1024*1024):.1f} MB")
+    print(f"To: {dest}")
+    
+    resp = requests.get(info.url, stream=True, timeout=30)
+    resp.raise_for_status()
+    
+    total = int(resp.headers.get('content-length', 0))
+    downloaded = 0
+    
+    with open(dest, 'wb') as f:
+        for chunk in resp.iter_content(chunk_size=8192):
+            if chunk:
                 f.write(chunk)
                 downloaded += len(chunk)
-                if on_progress:
-                    on_progress(downloaded, total)
+                pct = (downloaded / total * 100) if total else 0
+                print(f"\rProgress: {pct:.1f}% ({downloaded/(1024*1024):.1f}/{total/(1024*1024):.1f} MB)", end='')
+    
+    print(f"\n✅ Saved: {dest}")

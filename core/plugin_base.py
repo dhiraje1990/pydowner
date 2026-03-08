@@ -20,10 +20,12 @@ class BaseHostPlugin(ABC):
     @abstractmethod
     def can_handle(self, url: str) -> bool:
         """Return True if this plugin handles the given URL."""
+        pass
 
     @abstractmethod
     def resolve(self, url: str) -> DownloadInfo:
         """Parse the page and return the direct download link + metadata."""
+        pass
 
     def login(self, username: str, password: str) -> bool:
         """Optional: implement for premium accounts."""
