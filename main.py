@@ -1,147 +1,104 @@
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog, simpledialog
+from tkinter import ttk, messagebox, filedialog
 from core import DownloadManager
 
-class DownloadApp:
+class App:
     def __init__(self, root):
         self.root = root
-        self.root.title("OpenDownloader - Modular Download Manager")
-        self.root.geometry("850x450")
-        
+        self.root.title("OpenDownloader")
+        self.root.geometry("800x500")
         self.manager = DownloadManager()
-        
-        self.setup_ui()
-        self.populate_existing_downloads()
-        
-        # Start UI Polling Loop
-        self.update_ui()
-        
-        # Ensure clean exit
-        self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
-    def setup_ui(self):
-        # Top Frame (URL Entry & Buttons)
-        top_frame = tk.Frame(self.root, padx=10, pady=10)
-        top_frame.pack(fill=tk.X)
-        
-        tk.Label(top_frame, text="URL:").pack(side=tk.LEFT)
-        self.url_entry = tk.Entry(top_frame, width=60)
-        self.url_entry.pack(side=tk.LEFT, padx=5)
-        
-        tk.Button(top_frame, text="Add Download", command=self.add_download).pack(side=tk.LEFT, padx=5)
-        tk.Button(top_frame, text="Settings", command=self.open_settings).pack(side=tk.RIGHT)
+        # UI Setup
+        header = tk.Frame(root, pady=10)
+        header.pack(fill=tk.X)
+        self.url_var = tk.StringVar()
+        tk.Entry(header, textvariable=self.url_var, width=60).pack(side=tk.LEFT, padx=10)
+        tk.Button(header, text="Add Download", command=self.add_dl).pack(side=tk.LEFT)
+        tk.Button(header, text="Settings", command=self.open_settings).pack(side=tk.RIGHT, padx=10)
 
-        # Middle Frame (Treeview)
-        tree_frame = tk.Frame(self.root, padx=10, pady=5)
-        tree_frame.pack(fill=tk.BOTH, expand=True)
-        
-        columns = ("id", "filename", "size", "downloaded", "status", "speed")
-        self.tree = ttk.Treeview(tree_frame, columns=columns, show="headings", selectmode="browse")
-        
-        self.tree.heading("id", text="ID")
-        self.tree.column("id", width=0, stretch=tk.NO) # Hide ID column
-        
-        self.tree.heading("filename", text="File Name")
-        self.tree.column("filename", width=250)
-        
-        self.tree.heading("size", text="Total Size")
-        self.tree.column("size", width=100)
-        
-        self.tree.heading("downloaded", text="Downloaded")
-        self.tree.column("downloaded", width=100)
-        
+        # Table
+        self.tree = ttk.Treeview(root, columns=("id", "file", "size", "progress", "status", "speed"), show="headings")
+        self.tree.heading("file", text="Filename")
+        self.tree.heading("size", text="Size")
+        self.tree.heading("progress", text="Downloaded")
         self.tree.heading("status", text="Status")
-        self.tree.column("status", width=100)
-        
         self.tree.heading("speed", text="Speed")
-        self.tree.column("speed", width=100)
+        self.tree.column("id", width=0, stretch=False)
+        self.tree.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        # Context Menu
+        self.menu = tk.Menu(root, tearoff=0)
+        self.menu.add_command(label="Resume (Continue)", command=self.resume_dl)
+        self.menu.add_command(label="Restart (From 0%)", command=self.restart_dl)
+        self.menu.add_command(label="Pause", command=self.pause_dl)
+        self.menu.add_separator()
+        self.menu.add_command(label="Delete from List", command=lambda: self.delete_dl(False))
+        self.menu.add_command(label="Delete from List & Disk", command=lambda: self.delete_dl(True))
+
+        # FIX: Bindings
+        self.tree.bind("<Button-3>", self.show_menu) # Right click
+        # The magic fix: Clicking anywhere on the root window or tree hides the menu
+        self.root.bind("<Button-1>", self.hide_menu) 
         
-        self.tree.pack(fill=tk.BOTH, expand=True)
+        self.refresh_ui()
+        self.load_existing()
 
-        # Right Click Context Menu
-        self.context_menu = tk.Menu(self.tree, tearoff=0)
-        self.context_menu.add_command(label="Resume / Restart", command=self.resume_selected)
-        self.context_menu.add_command(label="Pause", command=self.pause_selected)
-        self.context_menu.add_separator()
-        self.context_menu.add_command(label="Delete", command=self.delete_selected)
-        
-        self.tree.bind("<Button-3>", self.show_context_menu)
+    def hide_menu(self, event=None):
+        self.menu.unpost()
 
-    def format_size(self, bytes_size):
-        if bytes_size == 0: return "Unknown"
-        for unit in['B', 'KB', 'MB', 'GB', 'TB']:
-            if bytes_size < 1024.0:
-                return f"{bytes_size:.2f} {unit}"
-            bytes_size /= 1024.0
-
-    def add_download(self):
-        url = self.url_entry.get().strip()
-        if url:
-            dl_id = self.manager.add_download(url)
-            self.tree.insert("", tk.END, iid=dl_id, values=(dl_id, "Resolving...", "0", "0", "Queued", "0 KB/s"))
-            self.url_entry.delete(0, tk.END)
-
-    def populate_existing_downloads(self):
-        for dl_id, info in self.manager.downloads.items():
-            f_size = self.format_size(info['size'])
-            f_down = self.format_size(info['downloaded'])
-            self.tree.insert("", tk.END, iid=dl_id, values=(dl_id, info['filename'], f_size, f_down, info['status'], info['speed']))
-
-    def update_ui(self):
-        """Polls the DownloadManager for state changes and updates Treeview"""
-        for dl_id, info in self.manager.downloads.items():
-            if self.tree.exists(dl_id):
-                f_size = self.format_size(info['size'])
-                f_down = self.format_size(info['downloaded'])
-                self.tree.item(dl_id, values=(dl_id, info['filename'], f_size, f_down, info['status'], info['speed']))
-        
-        self.root.after(1000, self.update_ui) # Poll every 1 second
-
-    def show_context_menu(self, event):
+    def show_menu(self, event):
         item = self.tree.identify_row(event.y)
         if item:
             self.tree.selection_set(item)
-            self.context_menu.post(event.x_root, event.y_root)
+            self.menu.post(event.x_root, event.y_root)
+            return "break" # Prevents system focus issues
 
-    def get_selected_id(self):
-        selected = self.tree.selection()
-        if selected:
-            return selected[0] # Returns the iid (which is dl_id)
-        return None
+    def add_dl(self):
+        url = self.url_var.get().strip()
+        if url:
+            self.manager.add_download(url)
+            self.url_var.set("")
+            self.load_existing()
 
-    def resume_selected(self):
-        dl_id = self.get_selected_id()
-        if dl_id:
-            self.manager.start_download(dl_id)
+    def resume_dl(self):
+        sel = self.tree.selection()
+        if sel: self.manager.start_download(sel[0], restart=False)
 
-    def pause_selected(self):
-        dl_id = self.get_selected_id()
-        if dl_id:
-            self.manager.pause_download(dl_id)
+    def restart_dl(self):
+        sel = self.tree.selection()
+        if sel: 
+            if messagebox.askyesno("Restart", "This will delete the partial file and start over. Continue?"):
+                self.manager.start_download(sel[0], restart=True)
 
-    def delete_selected(self):
-        dl_id = self.get_selected_id()
-        if dl_id:
-            if messagebox.askyesno("Delete", "Delete file from disk as well?"):
-                self.manager.delete_download(dl_id, delete_file=True)
-            else:
-                self.manager.delete_download(dl_id, delete_file=False)
-            self.tree.delete(dl_id)
+    def pause_dl(self):
+        sel = self.tree.selection()
+        if sel: self.manager.pause_download(sel[0])
+
+    def delete_dl(self, from_disk):
+        sel = self.tree.selection()
+        if sel:
+            self.manager.delete_download(sel[0], delete_file=from_disk)
+            self.tree.delete(sel[0])
 
     def open_settings(self):
-        # Very basic settings dialog
-        new_dir = filedialog.askdirectory(initialdir=self.manager.settings["default_folder"], title="Select Default Download Folder")
-        if new_dir:
-            self.manager.settings["default_folder"] = new_dir
+        path = filedialog.askdirectory()
+        if path:
+            self.manager.settings["default_folder"] = path
             self.manager.save_settings()
-            messagebox.showinfo("Settings", f"Default folder updated to:\n{new_dir}")
 
-    def on_close(self):
-        self.manager.save_downloads()
-        self.manager.save_settings()
-        self.root.destroy()
+    def load_existing(self):
+        for item in self.tree.get_children(): self.tree.delete(item)
+        for id, info in self.manager.downloads.items():
+            self.tree.insert("", tk.END, iid=id, values=(id, info["filename"], info["size"], info["downloaded"], info["status"], info["speed"]))
+
+    def refresh_ui(self):
+        for id, info in self.manager.downloads.items():
+            if self.tree.exists(id):
+                self.tree.item(id, values=(id, info["filename"], info["size"], info["downloaded"], info["status"], info["speed"]))
+        self.root.after(1000, self.refresh_ui)
 
 if __name__ == "__main__":
     root = tk.Tk()
-    app = DownloadApp(root)
+    app = App(root)
     root.mainloop()
