@@ -11,7 +11,13 @@ class DownloadManager:
     def __init__(self):
         self.settings_path = "settings.json"
         self.downloads_path = "downloads.json"
-        self.settings = {"default_folder": os.path.join(os.path.expanduser("~"), "Downloads", "OpenDownloader")}
+        self.settings = {
+            "default_folder": os.path.join(
+                os.path.expanduser("~"),
+                "Downloads", 
+                "PyDowner"
+            )
+        }
         self.load_settings()
         
         self.downloads = {} 
